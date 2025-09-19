@@ -8,10 +8,14 @@ import datetime
 import re
 
 # --- Configs ---
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")  # کانال یا گروهی که باید ریپورت بره
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+BOT_TOKEN = os.getenv("MY_BOT_TOKEN")
+CHANNEL_ID = os.getenv("MY_CHANNEL_ID")  # کانال یا گروهی که باید ریپورت بره
+GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN")
 REPO_NAME = "AmirRezaFarhadi/webtomed"
+
+# --- Safety Check ---
+if not BOT_TOKEN or not CHANNEL_ID or not GITHUB_TOKEN:
+    raise ValueError("❌ Missing one or more environment variables: MY_BOT_TOKEN / MY_CHANNEL_ID / MY_GITHUB_TOKEN")
 
 # --- Init ---
 bot = telegram.Bot(BOT_TOKEN)
@@ -45,6 +49,7 @@ TL;DR 🚀
 """
     return template, title, link, category
 
+# --- Commands ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 Bot started and ready!")
 
@@ -63,6 +68,7 @@ async def publish_article(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
+# --- Button Handler ---
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
