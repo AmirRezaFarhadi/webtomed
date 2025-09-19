@@ -76,25 +76,29 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "publish":
-        # create new branch for PR
-        source = repo.get_branch("main")
-        new_branch_name = "bot-article-branch"
-        try:
-            repo.create_git_ref(ref=f"refs/heads/{new_branch_name}", sha=source.commit.sha)
-        except Exception as e:
-            print(f"⚠️ Branch may already exist: {e}")
+       article_text, title, link = fetch_latest_article()
 
-        # create PR
-        pr = repo.create_pull(
-            title="📝 New article from bot",
-            body="Auto-generated article",
-            head=new_branch_name,
-            base="main"
-        )
-        await query.edit_message_text("✅ Pull Request created: " + pr.html_url)
+    # create new branch for PR
+    source = repo.get_branch("main")
+    new_branch_name = f"bot-article-{title.replace(' ', '-')[:20]}"
+    try:
+        repo.create_git_ref(ref=f"refs/heads/{new_branch_name}", sha=source.commit.sha)
+    except Exception as e:
+        print(f"⚠️ Branch may already exist: {e}")
 
-    elif query.data == "cancel":
-        await query.edit_message_text("❌ Publishing cancelled by admin.")
+    # create new file content
+    file_path = f"posts/{title.replace(' ', '_')}.md"
+    commit_message = f"Add article: {title}"
+    repo.create_file(file_path, commit_message, article_text, branch=new_branch_name)
+
+    # create PR
+    pr = repo.create_pull(
+        title=f"📝 New article: {title}",
+        body="Auto-generated article from Telegram bot",
+        head=new_branch_name,
+        base="main"
+    )
+    await query.edit_message_text("✅ Pull Request created: " + pr.html_url)
 
 # --- Handlers ---
 app.add_handler(CommandHandler("start", start))
