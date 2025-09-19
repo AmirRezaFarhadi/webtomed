@@ -1,7 +1,7 @@
 import feedparser
 import telegram
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 from github import Github
 import os
 import datetime
@@ -26,23 +26,26 @@ repo = gh.get_repo(REPO_NAME)
 
 # --- Helpers ---
 def slugify(text):
+    """ تبدیل عنوان مقاله به فرمت امن برای فایل و برنچ """
     return re.sub(r'[^a-zA-Z0-9\-]', '-', text).strip('-').lower()
 
 def clean_html(raw_html):
+    """ پاک کردن تگ‌های HTML از خلاصه مقاله """
     return BeautifulSoup(raw_html, "html.parser").get_text()
 
 def fetch_latest_article():
+    """ گرفتن اولین مقاله جدید از RSS که قبلاً پست نشده """
     feed = feedparser.parse("https://zee.backpr.com/index.xml")
     posted_file = "posted_articles.txt"
 
-    # بخونیم کدوم لینک‌ها قبلاً پست شدن
+    # لیست مقالاتی که قبلاً پست شدن
     if os.path.exists(posted_file):
         with open(posted_file, "r") as f:
             posted_links = set(f.read().splitlines())
     else:
         posted_links = set()
 
-    # اولین مقاله‌ای که هنوز پست نشده رو برگردون
+    # اولین مقاله جدید
     for item in feed.entries:
         link = item.link
         if link not in posted_links:
@@ -51,7 +54,7 @@ def fetch_latest_article():
             raw_summary = item.summary if hasattr(item, "summary") else ""
             summary = clean_html(raw_summary)
 
-            # ذخیره لینک مقاله که دوباره استفاده نشه
+            # ذخیره لینک برای دفعات بعد
             with open(posted_file, "a") as f:
                 f.write(link + "\n")
 
@@ -73,53 +76,30 @@ TL;DR 🚀
 
 # --- Commands ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ تست اولیه """
     await update.message.reply_text("🤖 Bot started and ready!")
 
 async def publish_article(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ اجرای کامل: دریافت مقاله → ساخت فایل → PR → مرج → گزارش در تلگرام """
     article_text, title, link, category = fetch_latest_article()
 
     if not article_text:
         await bot.send_message(chat_id=CHANNEL_ID, text="⚠️ No new articles found.")
         return
 
-    keyboard = [
-        [InlineKeyboardButton("✅ Publish", callback_data="publish"),
-         InlineKeyboardButton("❌ Cancel", callback_data="cancel")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    # --- Create new branch ---
+    today = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    branch_name = f"bot-article-{slugify(title)[:30]}-{today}"
 
-    await bot.send_message(
-        chat_id=CHANNEL_ID,
-        text=f"🚀 New Article Ready:\n\n{article_text}",
-        reply_markup=reply_markup
-    )
+    source = repo.get_branch("main")
+    repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=source.commit.sha)
 
-# --- Button Handler ---
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    # --- File path ---
+    safe_title = slugify(title)
+    file_path = f"articles/{safe_title}.md"
 
-    if query.data == "publish":
-        article_text, title, link, category = fetch_latest_article()
-
-        if not article_text:
-            await query.edit_message_text("⚠️ No new article to publish.")
-            return
-
-        # branch name
-        today = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-        branch_name = f"bot-article-{slugify(title)[:30]}-{today}"
-
-        # base branch
-        source = repo.get_branch("main")
-        repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=source.commit.sha)
-
-        # file path
-        safe_title = slugify(title)
-        file_path = f"articles/{safe_title}.md"
-
-        # markdown with front matter
-        md_content = f"""---
+    # --- Markdown content ---
+    md_content = f"""---
 title: "{title}"
 date: "{datetime.datetime.utcnow().isoformat()}"
 category: "{category}"
@@ -129,34 +109,44 @@ tags: ["ai-generated"]
 {article_text}
 """
 
-        # commit file
-        repo.create_file(
-            path=file_path,
-            message=f"Add article: {title}",
-            content=md_content,
-            branch=branch_name
+    # --- Commit file ---
+    repo.create_file(
+        path=file_path,
+        message=f"Add article: {title}",
+        content=md_content,
+        branch=branch_name
+    )
+
+    # --- Create PR ---
+    pr = repo.create_pull(
+        title=f"📝 New article: {title}",
+        body=f"Auto-generated article via Telegram Bot 🤖\n\n---\n\n{article_text}",
+        head=branch_name,
+        base="main"
+    )
+
+    # --- Add label ---
+    pr.add_to_labels("ai-generated")
+
+    # --- Merge automatically ---
+    pr.merge(commit_message=f"Auto-merged article: {title}")
+
+    # --- Report to Telegram ---
+    await bot.send_message(
+        chat_id=CHANNEL_ID,
+        text=(
+            f"✅ New article published!\n\n"
+            f"📌 Title: {title}\n"
+            f"🔗 Link: {link}\n"
+            f"📂 Branch: {branch_name}\n"
+            f"📜 Pull Request: {pr.html_url}\n"
+            f"✅ Successfully merged into main!"
         )
-
-        # create PR
-        pr = repo.create_pull(
-            title=f"📝 New article: {title}",
-            body=f"Auto-generated article via Telegram Bot 🤖\n\n---\n\n{article_text}",
-            head=branch_name,
-            base="main"
-        )
-
-        # add label ai-generated
-        pr.add_to_labels("ai-generated")
-
-        await query.edit_message_text("✅ Pull Request created: " + pr.html_url)
-
-    elif query.data == "cancel":
-        await query.edit_message_text("❌ Publishing cancelled.")
+    )
 
 # --- Handlers ---
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("post", publish_article))
-app.add_handler(CallbackQueryHandler(button))
 
 if __name__ == "__main__":
     app.run_polling()
