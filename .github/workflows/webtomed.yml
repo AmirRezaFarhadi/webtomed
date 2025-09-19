@@ -23,7 +23,7 @@ jobs:
 
       - name: Run bot
         env:
-          BOT_TOKEN: ${{ secrets.MY_BOT_TOKEN }}
-          CHANNEL_ID: ${{ secrets.MY_CHANNEL_ID }}
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          MY_BOT_TOKEN: ${{ secrets.MY_BOT_TOKEN }}
+          MY_CHANNEL_ID: ${{ secrets.MY_CHANNEL_ID }}
+          MY_GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
         run: python webtomed.py
