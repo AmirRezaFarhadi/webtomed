@@ -1,0 +1,4 @@
+feedparser
+python-telegram-bot==20.3
+PyGithub
+python-dotenv

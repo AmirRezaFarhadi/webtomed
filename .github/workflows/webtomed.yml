@@ -1,0 +1,29 @@
+name: WebToMed Bot
+
+on:
+  workflow_dispatch:        # اجرای دستی
+  schedule:
+    - cron: "0 */6 * * *"   # هر 6 ساعت یک بار
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          BOT_TOKEN: ${{ secrets.MY_BOT_TOKEN }}
+          CHANNEL_ID: ${{ secrets.MY_CHANNEL_ID }}
+          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+        run: python webtomed.py
