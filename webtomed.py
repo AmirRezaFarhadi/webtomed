@@ -33,14 +33,29 @@ def clean_html(raw_html):
 
 def fetch_latest_article():
     feed = feedparser.parse("https://zee.backpr.com/index.xml")
-    item = feed.entries[0]
-    title = item.title
-    link = item.link                      # ✅ لینک مستقیم مقاله
-    category = item.get("category", "general")
-    raw_summary = item.summary if hasattr(item, "summary") else ""
-    summary = clean_html(raw_summary)     # ✅ پاکسازی HTML
+    posted_file = "posted_articles.txt"
 
-    template = f"""{title}
+    # بخونیم کدوم لینک‌ها قبلاً پست شدن
+    if os.path.exists(posted_file):
+        with open(posted_file, "r") as f:
+            posted_links = set(f.read().splitlines())
+    else:
+        posted_links = set()
+
+    # اولین مقاله‌ای که هنوز پست نشده رو برگردون
+    for item in feed.entries:
+        link = item.link
+        if link not in posted_links:
+            title = item.title
+            category = item.get("category", "general")
+            raw_summary = item.summary if hasattr(item, "summary") else ""
+            summary = clean_html(raw_summary)
+
+            # ذخیره لینک مقاله که دوباره استفاده نشه
+            with open(posted_file, "a") as f:
+                f.write(link + "\n")
+
+            template = f"""{title}
 
 TL;DR 🚀
 {summary[:200]}...
@@ -52,7 +67,9 @@ TL;DR 🚀
 👉 Want the full deep dive? Check it out here:  
 {link}
 """
-    return template, title, link, category
+            return template, title, link, category
+
+    return None, None, None, None  # اگه همه پست شده بودن
 
 # --- Commands ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -60,6 +77,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def publish_article(update: Update, context: ContextTypes.DEFAULT_TYPE):
     article_text, title, link, category = fetch_latest_article()
+
+    if not article_text:
+        await bot.send_message(chat_id=CHANNEL_ID, text="⚠️ No new articles found.")
+        return
 
     keyboard = [
         [InlineKeyboardButton("✅ Publish", callback_data="publish"),
@@ -80,6 +101,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "publish":
         article_text, title, link, category = fetch_latest_article()
+
+        if not article_text:
+            await query.edit_message_text("⚠️ No new article to publish.")
+            return
 
         # branch name
         today = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
