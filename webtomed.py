@@ -9,19 +9,20 @@ import re
 
 # --- Configs ---
 BOT_TOKEN = os.getenv("MY_BOT_TOKEN")
-CHANNEL_ID = os.getenv("MY_CHANNEL_ID")  # کانال یا گروهی که باید ریپورت بره
+CHANNEL_ID = os.getenv("MY_CHANNEL_ID")
 GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN")
 REPO_NAME = "AmirRezaFarhadi/webtomed"
 
 # --- Safety Check ---
 if not BOT_TOKEN or not CHANNEL_ID or not GITHUB_TOKEN:
-    raise ValueError("❌ Missing one or more environment variables: MY_BOT_TOKEN / MY_CHANNEL_ID / MY_GITHUB_TOKEN")
+    raise ValueError("❌ Missing one or more environment variables!")
 
 # --- Init ---
 bot = telegram.Bot(BOT_TOKEN)
 app = Application.builder().token(BOT_TOKEN).build()
-gh = Github(auth=Github.Auth.Token(GITHUB_TOKEN))
+gh = Github(GITHUB_TOKEN)   # ✅ نسخه درست
 repo = gh.get_repo(REPO_NAME)
+
 
 # --- Helpers ---
 def slugify(text):
