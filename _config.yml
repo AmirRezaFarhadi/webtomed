@@ -1,0 +1,7 @@
+title: "WebToMed Articles"
+description: "Auto-generated articles feed"
+baseurl: ""
+url: "https://AmirRezaFarhadi.github.io/webtomed"
+
+plugins:
+  - jekyll-feed

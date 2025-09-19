@@ -94,15 +94,17 @@ async def publish_article(update: Update, context: ContextTypes.DEFAULT_TYPE):
     source = repo.get_branch("main")
     repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=source.commit.sha)
 
-    # --- File path ---
+    # --- File path (✅ تغییر به Jekyll _posts)
+    today_date = datetime.datetime.utcnow().strftime("%Y-%m-%d")
     safe_title = slugify(title)
-    file_path = f"articles/{safe_title}.md"
+    file_path = f"_posts/{today_date}-{safe_title}.md"
 
-    # --- Markdown content ---
+    # --- Markdown content (✅ front matter سازگار با Jekyll)
     md_content = f"""---
+layout: post
 title: "{title}"
-date: "{datetime.datetime.utcnow().isoformat()}"
-category: "{category}"
+date: "{datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")}"
+categories: "{category}"
 tags: ["ai-generated"]
 ---
 
