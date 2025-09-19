@@ -6,6 +6,7 @@ from github import Github
 import os
 import datetime
 import re
+from bs4 import BeautifulSoup   # ✅ برای پاک کردن HTML
 
 # --- Configs ---
 BOT_TOKEN = os.getenv("MY_BOT_TOKEN")
@@ -20,21 +21,24 @@ if not BOT_TOKEN or not CHANNEL_ID or not GITHUB_TOKEN:
 # --- Init ---
 bot = telegram.Bot(BOT_TOKEN)
 app = Application.builder().token(BOT_TOKEN).build()
-gh = Github(GITHUB_TOKEN)   # ✅ نسخه درست
+gh = Github(GITHUB_TOKEN)
 repo = gh.get_repo(REPO_NAME)
-
 
 # --- Helpers ---
 def slugify(text):
     return re.sub(r'[^a-zA-Z0-9\-]', '-', text).strip('-').lower()
 
+def clean_html(raw_html):
+    return BeautifulSoup(raw_html, "html.parser").get_text()
+
 def fetch_latest_article():
     feed = feedparser.parse("https://zee.backpr.com/index.xml")
     item = feed.entries[0]
     title = item.title
-    link = item.link
+    link = item.link                      # ✅ لینک مستقیم مقاله
     category = item.get("category", "general")
-    summary = item.summary if hasattr(item, "summary") else ""
+    raw_summary = item.summary if hasattr(item, "summary") else ""
+    summary = clean_html(raw_summary)     # ✅ پاکسازی HTML
 
     template = f"""{title}
 
@@ -111,7 +115,7 @@ tags: ["ai-generated"]
         # create PR
         pr = repo.create_pull(
             title=f"📝 New article: {title}",
-             body=f"Auto-generated article via Telegram Bot 🤖\n\n---\n\n{article_text}",
+            body=f"Auto-generated article via Telegram Bot 🤖\n\n---\n\n{article_text}",
             head=branch_name,
             base="main"
         )
