@@ -111,7 +111,7 @@ tags: ["ai-generated"]
         # create PR
         pr = repo.create_pull(
             title=f"📝 New article: {title}",
-            body="Auto-generated article via Telegram Bot 🤖",
+             body=f"Auto-generated article via Telegram Bot 🤖\n\n---\n\n{article_text}",
             head=branch_name,
             base="main"
         )
