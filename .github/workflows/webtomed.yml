@@ -26,4 +26,5 @@ jobs:
           MY_BOT_TOKEN: ${{ secrets.MY_BOT_TOKEN }}
           MY_CHANNEL_ID: ${{ secrets.MY_CHANNEL_ID }}
           MY_GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          HASHNODE_API_KEY: ${{ secrets.HASHNODE_API_KEY }} 
         run: python webtomed.py
