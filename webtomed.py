@@ -6,12 +6,15 @@ from github import Github
 import os
 import datetime
 import re
+import requests
 from bs4 import BeautifulSoup   # ✅ برای پاک کردن HTML
 
 # --- Configs ---
 BOT_TOKEN = os.getenv("MY_BOT_TOKEN")
 CHANNEL_ID = os.getenv("MY_CHANNEL_ID")
 GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN")
+HASHNODE_KEY = os.getenv("HASHNODE_API_KEY")
+HASHNODE_PUB = os.getenv("HASHNODE_PUBLICATION_ID")  # اختیاری
 REPO_NAME = "AmirRezaFarhadi/webtomed"
 
 # --- Safety Check ---
@@ -38,14 +41,12 @@ def fetch_latest_article():
     feed = feedparser.parse("https://zee.backpr.com/index.xml")
     posted_file = "posted_articles.txt"
 
-    # لیست مقالاتی که قبلاً پست شدن
     if os.path.exists(posted_file):
         with open(posted_file, "r") as f:
             posted_links = set(f.read().splitlines())
     else:
         posted_links = set()
 
-    # اولین مقاله جدید
     for item in feed.entries:
         link = item.link
         if link not in posted_links:
@@ -54,7 +55,6 @@ def fetch_latest_article():
             raw_summary = item.summary if hasattr(item, "summary") else ""
             summary = clean_html(raw_summary)
 
-            # ذخیره لینک برای دفعات بعد
             with open(posted_file, "a") as f:
                 f.write(link + "\n")
 
@@ -72,34 +72,59 @@ TL;DR 🚀
 """
             return template, title, link, category
 
-    return None, None, None, None  # اگه همه پست شده بودن
+    return None, None, None, None
+
+# --- Hashnode Publisher ---
+def publish_to_hashnode(title, article_text):
+    """ پابلیش مقاله روی Hashnode با API """
+    url = "https://api.hashnode.com/"
+    headers = {
+        "Authorization": HASHNODE_KEY,
+        "Content-Type": "application/json"
+    }
+    query = """
+    mutation CreateStory($input: CreateStoryInput!) {
+      createStory(input: $input) {
+        _id
+        slug
+        title
+      }
+    }
+    """
+    variables = {
+        "input": {
+            "title": title,
+            "contentMarkdown": article_text,
+            "tags": [],
+        }
+    }
+    if HASHNODE_PUB:
+        variables["input"]["publicationId"] = HASHNODE_PUB
+
+    response = requests.post(url, json={"query": query, "variables": variables}, headers=headers)
+    return response.json()
 
 # --- Commands ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """ تست اولیه """
     await update.message.reply_text("🤖 Bot started and ready!")
 
 async def publish_article(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """ اجرای کامل: دریافت مقاله → ساخت فایل → PR → مرج → گزارش در تلگرام """
     article_text, title, link, category = fetch_latest_article()
 
     if not article_text:
         await bot.send_message(chat_id=CHANNEL_ID, text="⚠️ No new articles found.")
         return
 
-    # --- Create new branch ---
     today = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     branch_name = f"bot-article-{slugify(title)[:30]}-{today}"
 
     source = repo.get_branch("main")
     repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=source.commit.sha)
 
-    # --- File path (✅ تغییر به Jekyll _posts)
     today_date = datetime.datetime.utcnow().strftime("%Y-%m-%d")
     safe_title = slugify(title)
     file_path = f"_posts/{today_date}-{safe_title}.md"
 
-    # --- Markdown content (✅ front matter سازگار با Jekyll)
     md_content = f"""---
 layout: post
 title: "{title}"
@@ -111,7 +136,6 @@ tags: ["ai-generated"]
 {article_text}
 """
 
-    # --- Commit file ---
     repo.create_file(
         path=file_path,
         message=f"Add article: {title}",
@@ -119,7 +143,6 @@ tags: ["ai-generated"]
         branch=branch_name
     )
 
-    # --- Create PR ---
     pr = repo.create_pull(
         title=f"📝 New article: {title}",
         body=f"Auto-generated article via Telegram Bot 🤖\n\n---\n\n{article_text}",
@@ -127,13 +150,18 @@ tags: ["ai-generated"]
         base="main"
     )
 
-    # --- Add label ---
     pr.add_to_labels("ai-generated")
-
-    # --- Merge automatically ---
     pr.merge(commit_message=f"Auto-merged article: {title}")
 
-    # --- Report to Telegram ---
+    # --- Publish to Hashnode ---
+    if HASHNODE_KEY:
+        result = publish_to_hashnode(title, article_text)
+        await bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=f"🌐 Hashnode post created: {result}"
+        )
+
+    # --- Telegram Report ---
     await bot.send_message(
         chat_id=CHANNEL_ID,
         text=(
@@ -142,7 +170,8 @@ tags: ["ai-generated"]
             f"🔗 Link: {link}\n"
             f"📂 Branch: {branch_name}\n"
             f"📜 Pull Request: {pr.html_url}\n"
-            f"✅ Successfully merged into main!"
+            f"✅ Successfully merged into main!\n"
+            f"🌐 Also published to Hashnode!"
         )
     )
 
