@@ -28,15 +28,15 @@ repo = gh.get_repo(REPO_NAME)
 
 # --- Helpers ---
 def slugify(text):
-    """ تبدیل عنوان مقاله به فرمت امن برای فایل و برنچ """
+    """تبدیل عنوان مقاله به فرمت امن برای فایل و برنچ"""
     return re.sub(r'[^a-zA-Z0-9\-]', '-', text).strip('-').lower()
 
 def clean_html(raw_html):
-    """ پاک کردن تگ‌های HTML از خلاصه مقاله """
+    """پاک کردن تگ‌های HTML از خلاصه مقاله"""
     return BeautifulSoup(raw_html, "html.parser").get_text()
 
 def fetch_latest_article():
-    """ گرفتن اولین مقاله جدید از RSS که قبلاً پست نشده """
+    """گرفتن اولین مقاله جدید از RSS که قبلاً پست نشده"""
     feed = feedparser.parse("https://zee.backpr.com/index.xml")
     posted_file = "posted_articles.txt"
 
@@ -75,8 +75,8 @@ TL;DR 🚀
 
 # --- Hashnode Publisher ---
 def publish_to_hashnode(title, article_text):
-    """ پابلیش مقاله روی Hashnode با API """
-    url = "https://api.hashnode.com/"
+    """پابلیش مقاله روی Hashnode با API جدید"""
+    url = "https://gql.hashnode.com/"
     headers = {
         "Authorization": HASHNODE_KEY,
         "Content-Type": "application/json"
@@ -84,9 +84,12 @@ def publish_to_hashnode(title, article_text):
     query = """
     mutation CreateStory($input: CreateStoryInput!) {
       createStory(input: $input) {
-        _id
-        slug
-        title
+        post {
+          _id
+          slug
+          title
+          url
+        }
       }
     }
     """
@@ -139,7 +142,6 @@ tags: ["ai-generated"]
     # --- Commit or update file ---
     try:
         contents = repo.get_contents(file_path, ref=branch_name)
-        # اگر فایل وجود داشت → آپدیت
         repo.update_file(
             path=file_path,
             message=f"Update article: {title}",
@@ -148,7 +150,6 @@ tags: ["ai-generated"]
             branch=branch_name
         )
     except Exception:
-        # اگر فایل وجود نداشت → بساز
         repo.create_file(
             path=file_path,
             message=f"Add article: {title}",
