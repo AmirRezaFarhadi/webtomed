@@ -136,13 +136,25 @@ tags: ["ai-generated"]
 {article_text}
 """
 
-    # --- Commit file ---
-    repo.create_file(
-        path=file_path,
-        message=f"Add article: {title}",
-        content=md_content,
-        branch=branch_name
-    )
+    # --- Commit or update file ---
+    try:
+        contents = repo.get_contents(file_path, ref=branch_name)
+        # اگر فایل وجود داشت → آپدیت
+        repo.update_file(
+            path=file_path,
+            message=f"Update article: {title}",
+            content=md_content,
+            sha=contents.sha,
+            branch=branch_name
+        )
+    except Exception:
+        # اگر فایل وجود نداشت → بساز
+        repo.create_file(
+            path=file_path,
+            message=f"Add article: {title}",
+            content=md_content,
+            branch=branch_name
+        )
 
     # --- Create PR ---
     pr = repo.create_pull(
