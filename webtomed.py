@@ -14,11 +14,10 @@ BOT_TOKEN = os.getenv("MY_BOT_TOKEN")
 CHANNEL_ID = os.getenv("MY_CHANNEL_ID")
 GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN")
 HASHNODE_KEY = os.getenv("HASHNODE_API_KEY")
-HASHNODE_PUB = os.getenv("HASHNODE_PUBLICATION_ID")  # اختیاری
 REPO_NAME = "AmirRezaFarhadi/webtomed"
 
 # --- Safety Check ---
-if not BOT_TOKEN or not CHANNEL_ID or not GITHUB_TOKEN:
+if not BOT_TOKEN or not CHANNEL_ID or not GITHUB_TOKEN or not HASHNODE_KEY:
     raise ValueError("❌ Missing one or more environment variables!")
 
 # --- Init ---
@@ -95,11 +94,9 @@ def publish_to_hashnode(title, article_text):
         "input": {
             "title": title,
             "contentMarkdown": article_text,
-            "tags": [],
+            "tags": []
         }
     }
-    if HASHNODE_PUB:
-        variables["input"]["publicationId"] = HASHNODE_PUB
 
     response = requests.post(url, json={"query": query, "variables": variables}, headers=headers)
     return response.json()
@@ -115,16 +112,19 @@ async def publish_article(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await bot.send_message(chat_id=CHANNEL_ID, text="⚠️ No new articles found.")
         return
 
+    # --- Create new branch ---
     today = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     branch_name = f"bot-article-{slugify(title)[:30]}-{today}"
 
     source = repo.get_branch("main")
     repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=source.commit.sha)
 
+    # --- File path (برای Jekyll) ---
     today_date = datetime.datetime.utcnow().strftime("%Y-%m-%d")
     safe_title = slugify(title)
     file_path = f"_posts/{today_date}-{safe_title}.md"
 
+    # --- Markdown content ---
     md_content = f"""---
 layout: post
 title: "{title}"
@@ -136,6 +136,7 @@ tags: ["ai-generated"]
 {article_text}
 """
 
+    # --- Commit file ---
     repo.create_file(
         path=file_path,
         message=f"Add article: {title}",
@@ -143,6 +144,7 @@ tags: ["ai-generated"]
         branch=branch_name
     )
 
+    # --- Create PR ---
     pr = repo.create_pull(
         title=f"📝 New article: {title}",
         body=f"Auto-generated article via Telegram Bot 🤖\n\n---\n\n{article_text}",
@@ -154,11 +156,16 @@ tags: ["ai-generated"]
     pr.merge(commit_message=f"Auto-merged article: {title}")
 
     # --- Publish to Hashnode ---
-    if HASHNODE_KEY:
+    try:
         result = publish_to_hashnode(title, article_text)
         await bot.send_message(
             chat_id=CHANNEL_ID,
             text=f"🌐 Hashnode post created: {result}"
+        )
+    except Exception as e:
+        await bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=f"⚠️ Failed to publish to Hashnode: {e}"
         )
 
     # --- Telegram Report ---
